@@ -1,20 +1,23 @@
 use iced::alignment::{self, Alignment};
-use iced::executor;
+use iced::{executor, Padding};
 use iced::keyboard;
 use iced::theme::{self, Theme};
 use iced::widget::pane_grid::{self, PaneGrid};
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::widget::{button, column, container, row, scrollable, text, pick_list};
 use iced::{
-    Application, Color, Command, Element, Length, Settings, Size, Subscription,
+    Application, Color, Command, Element, Length, Settings, Subscription,
 };
 use iced_lazy::responsive;
 use iced_native::{event, subscription, Event};
+mod proc;
 
-pub fn main() -> iced::Result {
-    Example::run(Settings::default())
+pub fn main() {
+    let _cpu_info = proc::get_cpuinfo();
+    proc::get_processes_info();
+    let _ = Grid::run(Settings::default());
 }
 
-struct Example {
+struct Grid {
     panes: pane_grid::State<Pane>,
     panes_created: usize,
     focus: Option<pane_grid::Pane>,
@@ -33,19 +36,20 @@ enum Message {
     Restore,
     Close(pane_grid::Pane),
     CloseFocused,
+    InfoSelected(SystemInfo),
 }
 
-impl Application for Example {
+impl Application for Grid {
     type Message = Message;
     type Theme = Theme;
     type Executor = executor::Default;
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        let (panes, _) = pane_grid::State::new(Pane::new(0));
+        let (panes, _) = pane_grid::State::new(Pane::new());
 
         (
-            Example {
+            Grid {
                 panes,
                 panes_created: 1,
                 focus: None,
@@ -55,7 +59,7 @@ impl Application for Example {
     }
 
     fn title(&self) -> String {
-        String::from("Pane grid - Iced")
+        String::from("System Dashboard")
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
@@ -64,7 +68,7 @@ impl Application for Example {
                 let result = self.panes.split(
                     axis,
                     &pane,
-                    Pane::new(self.panes_created),
+                    Pane::new(),
                 );
 
                 if let Some((pane, _)) = result {
@@ -78,7 +82,7 @@ impl Application for Example {
                     let result = self.panes.split(
                         axis,
                         &pane,
-                        Pane::new(self.panes_created),
+                        Pane::new(),
                     );
 
                     if let Some((pane, _)) = result {
@@ -138,6 +142,13 @@ impl Application for Example {
                     }
                 }
             }
+            Message::InfoSelected(info) => {
+                if let Some(pane) = self.focus {
+                    if let Some(Pane {selected_info, ..}) = self.panes.get_mut(&pane) {
+                        *selected_info = info;
+                    }
+                }
+            }
         }
 
         Command::none()
@@ -174,8 +185,7 @@ impl Application for Example {
 
             let title = row![
                 pin_button,
-                "Pane",
-                text(pane.id.to_string()).style(if is_focused {
+                text(pane.selected_info).style(if is_focused {
                     PANE_ID_COLOR_FOCUSED
                 } else {
                     PANE_ID_COLOR_UNFOCUSED
@@ -197,8 +207,8 @@ impl Application for Example {
                     style::title_bar_active
                 });
 
-            pane_grid::Content::new(responsive(move |size| {
-                view_content(id, total_panes, pane.is_pinned, size)
+            pane_grid::Content::new(responsive(move |_| {
+                view_content(id, total_panes, pane.is_pinned, pane.selected_info)
             }))
             .title_bar(title_bar)
             .style(if is_focused {
@@ -253,16 +263,51 @@ fn handle_hotkey(key_code: keyboard::KeyCode) -> Option<Message> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemInfo {
+    CPU,
+    Mem,
+    Processes,
+}
+
+impl SystemInfo {
+    const ALL: [SystemInfo; 3] = [
+        SystemInfo::CPU,
+        SystemInfo::Mem,
+        SystemInfo::Processes,
+    ];
+}
+
+impl Default for SystemInfo {
+    fn default() -> SystemInfo {
+        SystemInfo::Processes
+    }
+}
+
+impl std::fmt::Display for SystemInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SystemInfo::CPU => "CPU info",
+                SystemInfo::Mem => "Mem info",
+                SystemInfo::Processes => "Processes monitor",
+            }
+        )
+    }
+}
+
 struct Pane {
-    id: usize,
     pub is_pinned: bool,
+    pub selected_info: SystemInfo,
 }
 
 impl Pane {
-    fn new(id: usize) -> Self {
+    fn new() -> Self {
         Self {
-            id,
             is_pinned: false,
+            selected_info: SystemInfo::default(),
         }
     }
 }
@@ -271,7 +316,7 @@ fn view_content<'a>(
     pane: pane_grid::Pane,
     total_panes: usize,
     is_pinned: bool,
-    size: Size,
+    info: SystemInfo,
 ) -> Element<'a, Message> {
     let button = |label, message| {
         button(
@@ -286,6 +331,11 @@ fn view_content<'a>(
     };
 
     let mut controls = column![
+        pick_list(
+            &SystemInfo::ALL[..],
+            Some(info),
+            Message::InfoSelected
+        ),
         button(
             "Split horizontally",
             Message::Split(pane_grid::Axis::Horizontal, pane),
@@ -305,20 +355,75 @@ fn view_content<'a>(
         );
     }
 
-    let content = column![
-        text(format!("{}x{}", size.width, size.height)).size(24),
-        controls,
-    ]
-    .width(Length::Fill)
-    .spacing(10)
-    .align_items(Alignment::Center);
+    match info {
+        SystemInfo::CPU => {
+            let content = column![
+                controls,
+            ]
+            .width(Length::Fill)
+            .spacing(10)
+            .align_items(Alignment::Center);
 
-    container(scrollable(content))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .padding(5)
-        .center_y()
-        .into()
+            container(scrollable(content))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(5)
+                .center_y()
+                .into()
+        },
+        SystemInfo::Mem => {
+            let content = column![
+                controls,
+            ]
+            .width(Length::Fill)
+            .spacing(10)
+            .align_items(Alignment::Center);
+
+            container(scrollable(content))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(5)
+                .center_y()
+                .into()
+        },
+        SystemInfo::Processes => {
+            let data = proc::get_processes_info();
+
+            let mut content_data = column![
+                row![
+                    column![text("Process")].padding(Padding{bottom: 0, left: 50, top: 0, right: 50}),
+                    column![text("CPU Usage")]
+                ]
+            ]
+            .spacing(5)
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+            for d in data {
+                content_data = content_data.push(
+                    row![
+                        column![text(d.name)].padding(Padding{bottom: 0, left: 50, top: 0, right: 50}),
+                        column![text(format!("{:.2}%", d.cpu_usage))],
+                    ]
+                );
+            }
+
+            let content = column![
+                controls,
+                content_data,
+            ]
+            .width(Length::Fill)
+            .spacing(10)
+            .align_items(Alignment::Center);
+
+            container(scrollable(content))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(5)
+                .center_y()
+                .into()
+        }
+    }
 }
 
 fn view_controls<'a>(
