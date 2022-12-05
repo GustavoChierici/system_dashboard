@@ -355,36 +355,12 @@ fn view_content<'a>(
         );
     }
 
-    match info {
+    let content_data = match info {
         SystemInfo::CPU => {
-            let content = column![
-                controls,
-            ]
-            .width(Length::Fill)
-            .spacing(10)
-            .align_items(Alignment::Center);
-
-            container(scrollable(content))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(5)
-                .center_y()
-                .into()
+            column![text(proc::get_cpuinfo())]
         },
         SystemInfo::Mem => {
-            let content = column![
-                controls,
-            ]
-            .width(Length::Fill)
-            .spacing(10)
-            .align_items(Alignment::Center);
-
-            container(scrollable(content))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(5)
-                .center_y()
-                .into()
+            column![text(proc::get_meminfo())]
         },
         SystemInfo::Processes => {
             let data = proc::get_processes_info();
@@ -408,7 +384,11 @@ fn view_content<'a>(
                 );
             }
 
-            let content = column![
+            content_data
+        }
+    };
+
+    let content = column![
                 controls,
                 content_data,
             ]
@@ -422,8 +402,6 @@ fn view_content<'a>(
                 .padding(5)
                 .center_y()
                 .into()
-        }
-    }
 }
 
 fn view_controls<'a>(

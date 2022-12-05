@@ -5,6 +5,10 @@ pub fn get_cpuinfo() -> String {
     fs::read_to_string("/proc/cpuinfo").expect("/proc/cpuinfo not found")
 }
 
+pub fn get_meminfo() -> String {
+    fs::read_to_string("/proc/meminfo").expect("/proc/meminfo not found")
+}
+
 pub struct Process {
     pub name: String,
     pub cpu_usage: f64,
