@@ -69,5 +69,5 @@ pub fn get_monitor_info() -> String {
 }
 
 pub fn open_terminal() {
-    Command::new("gnome-terminal").spawn().unwrap();
+    Command::new("x-terminal-emulator").spawn().unwrap();
 }

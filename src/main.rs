@@ -345,10 +345,10 @@ fn view_content<'a>(
     let mut data: VecDeque<&str> = d.split("\n").collect();
     data.pop_front();
     data.pop_back();
-    let mut mem_total = 0.0;
-    let mut mem_used = 0.0;
-    let mut swap_total = 0.0;
-    let mut swap_used = 0.0;
+    let mem_total;
+    let mem_used;
+    let swap_total;
+    let swap_used;
     // println!("{:#?}", data[1].split(" ").collect::<Vec<&str>>());
 
     mem_total = (data[0].split(" ").collect::<Vec<&str>>())[6].parse::<f32>().unwrap();
